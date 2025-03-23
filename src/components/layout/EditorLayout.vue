@@ -1,7 +1,7 @@
 <template>
   <div class="editor-layout">
     <div class="toolbar">
-      <div class="logo">Unity-Like Editor</div>
+      <div class="logo">Kr Editor</div>
       <div class="main-menu">
         <div class="menu-item">File</div>
         <div class="menu-item">Edit</div>
@@ -34,7 +34,24 @@
               <HierarchyPanel />
             </Pane>
             <Pane :size="60" min-size="30">
-              <ScenePanel />
+              <div class="tabbed-panel">
+                <div class="panel-tabs">
+                  <button 
+                    class="tab-btn" 
+                    :class="{ active: currentTab === 'scene' }"
+                    @click="currentTab = 'scene'"
+                  >Scene</button>
+                  <button 
+                    class="tab-btn" 
+                    :class="{ active: currentTab === 'preview' }"
+                    @click="currentTab = 'preview'"
+                  >Preview</button>
+                </div>
+                <div class="panel-content">
+                  <ScenePanel v-if="currentTab === 'scene'" />
+                  <PreviewPanel v-if="currentTab === 'preview'" />
+                </div>
+              </div>
             </Pane>
             <Pane :size="20" min-size="10">
               <InspectorPanel />
@@ -61,7 +78,11 @@ import HierarchyPanel from '../panels/HierarchyPanel.vue';
 import ScenePanel from '../panels/ScenePanel.vue';
 import InspectorPanel from '../panels/InspectorPanel.vue';
 import ProjectConsolePanel from '../panels/ProjectConsolePanel.vue';
+import PreviewPanel from '../panels/PreviewPanel.vue';
 import editorStore from '../../store/editorStore';
+import { ref } from 'vue';
+
+const currentTab = ref('scene');
 </script>
 
 <style scoped>
@@ -204,5 +225,47 @@ import editorStore from '../../store/editorStore';
   bottom: 0;
   width: 3px;
   left: calc(50% - 1px);
+}
+
+.tabbed-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+.panel-tabs {
+  display: flex;
+  height: 30px;
+  background-color: #3a3a3a;
+  border-bottom: 1px solid #222;
+  padding: 0 10px;
+}
+
+.tab-btn {
+  background-color: transparent;
+  border: none;
+  color: #e0e0e0;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 5px 10px;
+  margin-right: 5px;
+}
+
+.tab-btn:hover {
+  background-color: #4a4a4a;
+}
+
+.tab-btn.active {
+  background-color: #4d78cc;
+  color: white;
+}
+
+.panel-content {
+  flex: 1;
+  height: calc(100% - 30px);
+  overflow: hidden;
+  position: relative;
 }
 </style>
