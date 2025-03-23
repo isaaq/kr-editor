@@ -109,28 +109,99 @@
             </div>
           </div>
           <div class="component-body">
-            <!-- Component specific properties would go here -->
-            <div v-if="component === 'MeshRenderer'" class="property-row">
-              <div class="property-label">Cast Shadows</div>
-              <div class="property-inputs">
-                <select class="property-select">
-                  <option>On</option>
-                  <option>Off</option>
-                  <option>Two Sided</option>
-                  <option>Shadows Only</option>
-                </select>
-              </div>
-            </div>
-            <div v-if="component === 'MeshRenderer'" class="property-row">
-              <div class="property-label">Materials</div>
-              <div class="property-inputs">
-                <div class="property-object-field">
-                  <div class="object-field-preview"></div>
-                  <div class="object-field-name">Default Material</div>
-                  <button class="object-field-btn">⋯</button>
+            <!-- 动态渲染组件属性 -->
+            <template v-for="(property, index) in getComponentProperties(component)" :key="index">
+              <div class="property-row">
+                <div class="property-label">{{ property.label }}</div>
+                <div class="property-inputs">
+                  <!-- 根据属性类型渲染不同的输入控件 -->
+                  
+                  <!-- 文本输入 -->
+                  <input v-if="property.type === 'text'" 
+                    type="text" 
+                    :value="getComponentPropertyValue(component, property.name, property.defaultValue)" 
+                    @input="e => updateComponentProperty(component, property.name, e.target.value)" 
+                    class="property-input" />
+                  
+                  <!-- 数字输入 -->
+                  <input v-else-if="property.type === 'number'" 
+                    type="number" 
+                    :min="property.min" 
+                    :max="property.max" 
+                    :value="getComponentPropertyValue(component, property.name, property.defaultValue)" 
+                    @input="e => updateComponentProperty(component, property.name, parseFloat(e.target.value))" 
+                    class="property-input" />
+                  
+                  <!-- 布尔值 (复选框) -->
+                  <input v-else-if="property.type === 'boolean'" 
+                    type="checkbox" 
+                    :checked="getComponentPropertyValue(component, property.name, property.defaultValue)" 
+                    @change="e => updateComponentProperty(component, property.name, e.target.checked)" 
+                    class="property-checkbox" />
+                  
+                  <!-- 下拉选择 -->
+                  <select v-else-if="property.type === 'select'" 
+                    :value="getComponentPropertyValue(component, property.name, property.defaultValue)" 
+                    @change="e => updateComponentProperty(component, property.name, e.target.value)" 
+                    class="property-select">
+                    <option v-for="option in property.options" :key="option" :value="option">{{ option }}</option>
+                  </select>
+                  
+                  <!-- 颜色选择器 -->
+                  <input v-else-if="property.type === 'color'" 
+                    type="color" 
+                    :value="getComponentPropertyValue(component, property.name, property.defaultValue)" 
+                    @input="e => updateComponentProperty(component, property.name, e.target.value)" 
+                    class="property-color" />
+                  
+                  <!-- 向量2输入 (x, y) -->
+                  <div v-else-if="property.type === 'vector2'" class="vector-inputs">
+                    <input type="number" 
+                      :value="getComponentPropertyValue(component, property.name, property.defaultValue).x" 
+                      @input="e => updateComponentVectorProperty(component, property.name, 'x', parseFloat(e.target.value))" 
+                      class="property-input" />
+                    <input type="number" 
+                      :value="getComponentPropertyValue(component, property.name, property.defaultValue).y" 
+                      @input="e => updateComponentVectorProperty(component, property.name, 'y', parseFloat(e.target.value))" 
+                      class="property-input" />
+                  </div>
+                  
+                  <!-- 向量4输入 (x, y, z, w) -->
+                  <div v-else-if="property.type === 'vector4'" class="vector-inputs">
+                    <input type="number" 
+                      :value="getComponentPropertyValue(component, property.name, property.defaultValue).x" 
+                      @input="e => updateComponentVectorProperty(component, property.name, 'x', parseFloat(e.target.value))" 
+                      class="property-input" />
+                    <input type="number" 
+                      :value="getComponentPropertyValue(component, property.name, property.defaultValue).y" 
+                      @input="e => updateComponentVectorProperty(component, property.name, 'y', parseFloat(e.target.value))" 
+                      class="property-input" />
+                    <input type="number" 
+                      :value="getComponentPropertyValue(component, property.name, property.defaultValue).z" 
+                      @input="e => updateComponentVectorProperty(component, property.name, 'z', parseFloat(e.target.value))" 
+                      class="property-input" />
+                    <input type="number" 
+                      :value="getComponentPropertyValue(component, property.name, property.defaultValue).w" 
+                      @input="e => updateComponentVectorProperty(component, property.name, 'w', parseFloat(e.target.value))" 
+                      class="property-input" />
+                  </div>
+                  
+                  <!-- 对象引用 -->
+                  <div v-else-if="property.type === 'object'" class="property-object-field">
+                    <div class="object-field-preview"></div>
+                    <div class="object-field-name">{{ getComponentPropertyValue(component, property.name, property.defaultValue) }}</div>
+                    <button class="object-field-btn" @click="selectObjectReference(component, property.name, property.objectType)">⋯</button>
+                  </div>
+                  
+                  <!-- 默认情况：文本输入 -->
+                  <input v-else 
+                    type="text" 
+                    :value="getComponentPropertyValue(component, property.name, property.defaultValue)" 
+                    @input="e => updateComponentProperty(component, property.name, e.target.value)" 
+                    class="property-input" />
                 </div>
               </div>
-            </div>
+            </template>
           </div>
         </div>
         
@@ -143,6 +214,7 @@
 <script setup>
 import { computed, ref } from 'vue';
 import editorStore from '../../store/editorStore';
+import componentConfig from '../../config/componentConfig';
 
 const selectedObject = computed(() => {
   const id = editorStore.state.activeGameObject;
@@ -189,6 +261,98 @@ const removeComponent = (index) => {
     // 在真实应用中，这里会调用一个方法来移除组件
     editorStore.logToConsole('warning', '尝试移除组件', `移除组件将在下一个版本中实现`);  
   }
+};
+
+// 获取组件的属性配置
+const getComponentProperties = (componentType) => {
+  // 如果组件类型存在于配置中，返回其属性，否则返回默认配置
+  return (componentConfig[componentType] || componentConfig.default).properties;
+};
+
+// 获取组件属性的值
+const getComponentPropertyValue = (componentType, propertyName, defaultValue) => {
+  if (!selectedObject.value) return defaultValue;
+  
+  // 检查组件数据是否存在
+  if (!selectedObject.value.componentData) {
+    selectedObject.value.componentData = {};
+  }
+  
+  // 检查特定组件的数据是否存在
+  if (!selectedObject.value.componentData[componentType]) {
+    selectedObject.value.componentData[componentType] = {};
+  }
+  
+  // 返回属性值，如果不存在则返回默认值
+  return selectedObject.value.componentData[componentType][propertyName] !== undefined
+    ? selectedObject.value.componentData[componentType][propertyName]
+    : defaultValue;
+};
+
+// 更新组件属性
+const updateComponentProperty = (componentType, propertyName, value) => {
+  if (!selectedObject.value) return;
+  
+  // 确保组件数据存在
+  if (!selectedObject.value.componentData) {
+    selectedObject.value.componentData = {};
+  }
+  
+  // 确保特定组件的数据存在
+  if (!selectedObject.value.componentData[componentType]) {
+    selectedObject.value.componentData[componentType] = {};
+  }
+  
+  // 更新属性值
+  selectedObject.value.componentData[componentType][propertyName] = value;
+  
+  // 在实际应用中，这里应该调用 editorStore 中的方法来更新组件数据
+  // 例如：editorStore.updateComponentProperty(selectedObject.value.id, componentType, propertyName, value);
+  
+  // 临时记录到控制台
+  editorStore.addConsoleMessage('info', `更新了 ${componentType} 组件的 ${propertyName} 属性为 ${value}`, '在检查器中');
+};
+
+// 更新向量类型的组件属性
+const updateComponentVectorProperty = (componentType, propertyName, axis, value) => {
+  if (!selectedObject.value) return;
+  
+  // 确保组件数据存在
+  if (!selectedObject.value.componentData) {
+    selectedObject.value.componentData = {};
+  }
+  
+  // 确保特定组件的数据存在
+  if (!selectedObject.value.componentData[componentType]) {
+    selectedObject.value.componentData[componentType] = {};
+  }
+  
+  // 确保向量属性存在
+  if (!selectedObject.value.componentData[componentType][propertyName]) {
+    // 根据轴的数量创建适当的向量对象
+    if (axis === 'w') {
+      selectedObject.value.componentData[componentType][propertyName] = { x: 0, y: 0, z: 0, w: 0 };
+    } else if (axis === 'z') {
+      selectedObject.value.componentData[componentType][propertyName] = { x: 0, y: 0, z: 0 };
+    } else {
+      selectedObject.value.componentData[componentType][propertyName] = { x: 0, y: 0 };
+    }
+  }
+  
+  // 更新特定轴的值
+  selectedObject.value.componentData[componentType][propertyName][axis] = value;
+  
+  // 在实际应用中，这里应该调用 editorStore 中的方法来更新组件数据
+  // 例如：editorStore.updateComponentVectorProperty(selectedObject.value.id, componentType, propertyName, axis, value);
+  
+  // 临时记录到控制台
+  editorStore.addConsoleMessage('info', `更新了 ${componentType} 组件的 ${propertyName}.${axis} 属性为 ${value}`, '在检查器中');
+};
+
+// 选择对象引用
+const selectObjectReference = (componentType, propertyName, objectType) => {
+  // 在实际应用中，这里应该打开一个对象选择器
+  editorStore.addConsoleMessage('info', `尝试为 ${componentType} 组件的 ${propertyName} 属性选择 ${objectType} 类型的对象`, '在检查器中');
 };
 </script>
 
@@ -349,7 +513,7 @@ const removeComponent = (index) => {
 }
 
 .property-label {
-  width: 40px;
+  width: 60px;
   padding-top: 4px;
 }
 
@@ -378,6 +542,8 @@ const removeComponent = (index) => {
   color: #e0e0e0;
   padding: 2px 4px;
   font-size: 12px;
+  height: 20px;
+  
 }
 
 .property-object-field {
@@ -429,5 +595,10 @@ const removeComponent = (index) => {
 
 .add-component-btn:hover {
   background-color: #555;
+}
+
+.vector-inputs {
+  display: flex;
+  gap: 2px;
 }
 </style>

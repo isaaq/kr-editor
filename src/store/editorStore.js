@@ -1,4 +1,5 @@
 import { reactive, readonly } from 'vue';
+import config from '../config';
 
 // Define the initial state
 const state = reactive({
@@ -10,7 +11,7 @@ const state = reactive({
       id: 1,
       name: 'Page',
       type: 'Page',
-      position: { x: 0, y: 0, z: -10 },
+      position: { x: 0, y: 0, z: 0 },
       rotation: { x: 0, y: 0, z: 0 },
       scale: { x: 1, y: 1, z: 1 },
       components: ['Transform', 'Camera'],
@@ -23,7 +24,7 @@ const state = reactive({
       name: '容器1',
       type: 'Container',
       position: { x: 0, y: 3, z: 0 },
-      rotation: { x: 50, y: -30, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
       scale: { x: 1, y: 1, z: 1 },
       components: ['Transform', 'Container'],
       parentId: null,
@@ -764,10 +765,43 @@ const actions = {
   }
 };
 
+// 从服务端获取资产列表
+async function fetchAssets() {
+  try {
+    const response = await fetch(`${config.api.baseUrl}/filetree/list`);
+    const data = await response.json();
+    
+    if (data.success && Array.isArray(data.data)) {
+      // 清空当前资产列表
+      state.assets = [];
+      
+      // 添加从服务端获取的资产
+      state.assets = data.data;
+      
+      console.log('资产列表已从服务端加载', state.assets);
+      return true;
+    } else {
+      console.error('获取资产列表失败:', data.error || '未知错误');
+      return false;
+    }
+  } catch (error) {
+    console.error('获取资产列表时出错:', error);
+    return false;
+  }
+}
+
+// 添加到 actions 中
+actions.fetchAssets = fetchAssets;
+
 // Create the store
 const editorStore = {
   state: readonly(state),
   ...actions
 };
+
+// 初始化时尝试加载资产列表
+fetchAssets().catch(err => {
+  console.error('初始化加载资产列表失败:', err);
+});
 
 export default editorStore;
