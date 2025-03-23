@@ -100,9 +100,9 @@ const state = reactive({
   ],
   // Editor state
   isPlaying: false,
-  activeTool: 'move',
+  activeTool: 'select',
   selectedAssets: [],
-  viewMode: '3D',
+  viewMode: 'desktop',
   // 拖拽相关状态
   dragState: {
     isDragging: false,
@@ -310,6 +310,11 @@ const actions = {
   toggleViewMode() {
     state.viewMode = state.viewMode === '3D' ? '2D' : '3D';
     this.addConsoleMessage('info', `切换到 ${state.viewMode} 视图模式`, 'at Editor.ToggleViewMode()');
+  },
+  
+  setViewMode(mode) {
+    state.viewMode = mode;
+    this.addConsoleMessage('info', `切换到${mode === 'mobile' ? '移动端' : mode === 'tablet' ? '平板' : '桌面端'}视图模式`, 'at Editor.SetViewMode()');
   },
   
   // 树形结构相关方法

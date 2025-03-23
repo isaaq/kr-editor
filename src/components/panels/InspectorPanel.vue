@@ -349,7 +349,7 @@ const removeComponent = (index) => {
 }
 
 .property-label {
-  width: 80px;
+  width: 40px;
   padding-top: 4px;
 }
 
@@ -367,6 +367,8 @@ const removeComponent = (index) => {
   padding: 2px 4px;
   font-size: 12px;
   text-align: center;
+  height: 20px;
+  width: 100%;
 }
 
 .property-select {
