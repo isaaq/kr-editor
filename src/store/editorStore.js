@@ -3,12 +3,13 @@ import { reactive, readonly } from 'vue';
 // Define the initial state
 const state = reactive({
   activeGameObject: null,
+  selectedGameObjects: [], // 多选游戏对象
   activeAsset: null,
   gameObjects: [
     {
       id: 1,
-      name: 'Main Camera',
-      type: 'Camera',
+      name: 'Page',
+      type: 'Page',
       position: { x: 0, y: 0, z: -10 },
       rotation: { x: 0, y: 0, z: 0 },
       scale: { x: 1, y: 1, z: 1 },
@@ -19,19 +20,19 @@ const state = reactive({
     },
     {
       id: 2,
-      name: 'Directional Light',
-      type: 'Light',
+      name: '容器1',
+      type: 'Container',
       position: { x: 0, y: 3, z: 0 },
       rotation: { x: 50, y: -30, z: 0 },
       scale: { x: 1, y: 1, z: 1 },
-      components: ['Transform', 'Light'],
+      components: ['Transform', 'Container'],
       parentId: null,
       isExpanded: true,
       children: []
     },
     {
       id: 3,
-      name: 'Game Object',
+      name: '对象1',
       type: 'GameObject',
       position: { x: 0, y: 0, z: 0 },
       rotation: { x: 0, y: 0, z: 0 },
@@ -106,8 +107,10 @@ const state = reactive({
   dragState: {
     isDragging: false,
     draggedItem: null,
+    draggedItems: [], // 多选拖拽
     dragType: null, // 'gameObject' 或 'asset'
-    dropTarget: null
+    dropTarget: null,
+    dropPosition: null // 'before', 'after', 'inside'
   },
   // Hierarchy panel state
   expandedFolders: ['Assets', 'Scenes']
@@ -115,8 +118,115 @@ const state = reactive({
 
 // Define actions to modify the state
 const actions = {
-  selectGameObject(id) {
-    state.activeGameObject = id;
+  selectGameObject(id, isMultiSelect = false) {
+    if (!isMultiSelect) {
+      // 单选模式
+      state.activeGameObject = id;
+      state.selectedGameObjects = id ? [id] : [];
+    } else {
+      // 多选模式
+      state.activeGameObject = id;
+      
+      // 如果已经在选中列表中，则移除
+      const index = state.selectedGameObjects.indexOf(id);
+      if (index !== -1) {
+        state.selectedGameObjects.splice(index, 1);
+        // 如果移除后还有选中的对象，则将第一个设为激活对象
+        if (state.selectedGameObjects.length > 0) {
+          state.activeGameObject = state.selectedGameObjects[0];
+        } else {
+          state.activeGameObject = null;
+        }
+      } else {
+        // 否则添加到选中列表
+        state.selectedGameObjects.push(id);
+      }
+    }
+  },
+  
+  // 获取所有选中的游戏对象
+  getSelectedGameObjects() {
+    return state.selectedGameObjects.map(id => {
+      return this.findGameObjectById(id);
+    }).filter(obj => obj !== null);
+  },
+  
+  // 清除所有选中
+  clearSelection() {
+    state.activeGameObject = null;
+    state.selectedGameObjects = [];
+  },
+  
+  // 全选游戏对象
+  selectAllGameObjects() {
+    // 获取所有游戏对象的ID
+    const allIds = [];
+    
+    const collectIds = (objects) => {
+      for (const obj of objects) {
+        allIds.push(obj.id);
+        
+        if (obj.children && obj.children.length > 0) {
+          collectIds(obj.children);
+        }
+      }
+    };
+    
+    collectIds(state.gameObjects);
+    
+    // 全部选中
+    state.selectedGameObjects = [...allIds];
+    
+    // 设置最后一个为活动对象
+    if (allIds.length > 0) {
+      state.activeGameObject = allIds[allIds.length - 1];
+    }
+    
+    return allIds.length;
+  },
+  
+  // 删除选中的所有游戏对象
+  deleteSelectedGameObjects() {
+    const selectedIds = [...state.selectedGameObjects];
+    let count = 0;
+    
+    // 从后往前删除，避免索引变化问题
+    for (let i = selectedIds.length - 1; i >= 0; i--) {
+      const id = selectedIds[i];
+      this.removeGameObject(id);
+      count++;
+    }
+    
+    // 清空选择
+    state.selectedGameObjects = [];
+    state.activeGameObject = null;
+    
+    return count;
+  },
+  
+  // 根据ID查找游戏对象
+  findGameObjectById(id) {
+    let result = null;
+    
+    const findInObjects = (objects) => {
+      for (const obj of objects) {
+        if (obj.id === id) {
+          result = obj;
+          return true;
+        }
+        
+        if (obj.children && obj.children.length > 0) {
+          if (findInObjects(obj.children)) {
+            return true;
+          }
+        }
+      }
+      
+      return false;
+    };
+    
+    findInObjects(state.gameObjects);
+    return result;
   },
   updateGameObjectTransform(id, transform) {
     const obj = state.gameObjects.find(obj => obj.id === id);
@@ -235,6 +345,47 @@ const actions = {
     return state.gameObjects.filter(obj => obj.parentId === null);
   },
   
+  // 获取所有选中的游戏对象
+  getSelectedGameObjects() {
+    return state.selectedGameObjects.map(id => {
+      return this.findGameObjectById(id);
+    }).filter(obj => obj !== null);
+  },
+  
+  // 选择所有游戏对象
+  selectAllGameObjects() {
+    const allObjects = [];
+    
+    const collectObjects = (objects) => {
+      for (const obj of objects) {
+        allObjects.push(obj.id);
+        
+        if (obj.children && obj.children.length > 0) {
+          collectObjects(obj.children);
+        }
+      }
+    };
+    
+    collectObjects(state.gameObjects);
+    
+    if (allObjects.length > 0) {
+      state.activeGameObject = allObjects[0];
+      state.selectedGameObjects = allObjects;
+    }
+  },
+  
+  // 删除选中的所有游戏对象
+  deleteSelectedGameObjects() {
+    const selectedIds = [...state.selectedGameObjects]; // 创建副本，因为在循环中会修改原数组
+    
+    for (const id of selectedIds) {
+      this.removeGameObject(id);
+    }
+    
+    // 清除选择
+    this.clearSelection();
+  },
+  
   // 获取顶层资产（没有父级的资产）
   getRootAssets() {
     return state.assets.filter(asset => asset.parentId === null);
@@ -258,47 +409,101 @@ const actions = {
   },
   
   // 拖拽相关方法
-  startDrag(item, type) {
+  startDrag(item, type, items = []) {
     state.dragState.isDragging = true;
     state.dragState.draggedItem = item;
+    state.dragState.draggedItems = items.length > 0 ? items : [item]; // 支持多选拖拽
     state.dragState.dragType = type;
     state.dragState.dropTarget = null;
+    state.dragState.dropPosition = null;
+    
+    // 显示拖拽开始提示
+    const itemCount = items.length;
+    const itemName = item.name;
+    if (itemCount > 1) {
+      this.addConsoleMessage('info', `开始拖拽 ${itemName} 和其他 ${itemCount - 1} 个对象`, '拖拽操作');
+    } else {
+      this.addConsoleMessage('info', `开始拖拽 ${itemName}`, '拖拽操作');
+    }
   },
   
-  setDropTarget(target) {
+  setDropTarget(target, position = 'inside') {
     state.dragState.dropTarget = target;
+    state.dragState.dropPosition = position;
   },
   
   endDrag() {
     // 如果有有效的放置目标，则执行放置操作
-    if (state.dragState.dropTarget && state.dragState.draggedItem) {
+    if (state.dragState.dropTarget && state.dragState.draggedItems.length > 0) {
       this.handleDrop();
     }
     
     // 重置拖拽状态
     state.dragState.isDragging = false;
     state.dragState.draggedItem = null;
+    state.dragState.draggedItems = [];
     state.dragState.dragType = null;
     state.dragState.dropTarget = null;
+    state.dragState.dropPosition = null;
   },
   
   handleDrop() {
-    const { draggedItem, dragType, dropTarget } = state.dragState;
+    const { draggedItems, dragType, dropTarget, dropPosition } = state.dragState;
+    
+    if (!dropTarget || !draggedItems.length) return;
+    
+    // 检查是否尝试将对象拖拽到自身或其子对象中
+    const isInvalidDrop = draggedItems.some(item => {
+      // 不能拖拽到自身
+      if (item.id === dropTarget.id) return true;
+      
+      // 不能拖拽到自己的子对象中
+      if (dragType === 'gameObject') {
+        // 检查目标是否是拖拽对象的子对象
+        const isChild = (parent, childId) => {
+          if (!parent.children) return false;
+          
+          for (const child of parent.children) {
+            if (child.id === childId) return true;
+            if (isChild(child, childId)) return true;
+          }
+          
+          return false;
+        };
+        
+        return isChild(item, dropTarget.id);
+      }
+      
+      return false;
+    });
+    
+    if (isInvalidDrop) {
+      this.addConsoleMessage('error', '无法将对象拖拽到自身或其子对象中', '拖拽操作失败');
+      return;
+    }
     
     if (dragType === 'asset') {
       // 处理资产拖拽
-      console.log('资产拖拽:', draggedItem.name, '->', dropTarget.name);
-      this.addConsoleMessage('info', `拖拽资产: ${draggedItem.name} -> ${dropTarget.name}`, `在项目面板中`);
+      const mainItem = draggedItems[0];
+      console.log('资产拖拽:', mainItem.name, '->', dropTarget.name);
+      this.addConsoleMessage('info', `拖拽资产: ${mainItem.name}${draggedItems.length > 1 ? ` 和其他 ${draggedItems.length - 1} 个资产` : ''} -> ${dropTarget.name}`, `在项目面板中`);
       
       // 移动资产
-      this.moveAsset(draggedItem.id, dropTarget.id);
+      for (const item of draggedItems) {
+        this.moveAsset(item.id, dropTarget.id);
+      }
     } else if (dragType === 'gameObject') {
       // 处理游戏对象拖拽
-      console.log('游戏对象拖拽:', draggedItem.name, '->', dropTarget.name);
-      this.addConsoleMessage('info', `拖拽游戏对象: ${draggedItem.name} -> ${dropTarget.name}`, `在层级面板中`);
+      const mainItem = draggedItems[0];
+      const positionText = dropPosition === 'inside' ? '内部' : (dropPosition === 'before' ? '前面' : '后面');
+      console.log('游戏对象拖拽:', mainItem.name, '->', dropTarget.name, '位置:', positionText);
+      this.addConsoleMessage('info', `拖拽游戏对象: ${mainItem.name}${draggedItems.length > 1 ? ` 和其他 ${draggedItems.length - 1} 个对象` : ''} -> ${dropTarget.name} 的${positionText}`, `在层级面板中`);
       
-      // 移动游戏对象
-      this.moveGameObject(draggedItem.id, dropTarget.id);
+      // 移动游戏对象 - 从后往前处理，以保持相对顺序
+      for (let i = draggedItems.length - 1; i >= 0; i--) {
+        const item = draggedItems[i];
+        this.moveGameObject(item.id, dropTarget.id, null, dropPosition);
+      }
     }
   },
   
@@ -397,7 +602,8 @@ const actions = {
   },
   
   // 移动游戏对象到新的父级
-  moveGameObject(gameObjectId, newParentId) {
+  // position 参数可以是：'inside'（放在内部）, 'before'（放在前面）, 'after'（放在后面）
+  moveGameObject(gameObjectId, newParentId, siblingId = null, position = 'inside') {
     // 首先找到要移动的游戏对象及其当前父级
     let gameObjectToMove = null;
     let currentParent = null;
@@ -480,25 +686,75 @@ const actions = {
       currentParentChildren.splice(index, 1);
     }
     
-    // 更新父级引用
-    gameObjectToMove.parentId = newParentId;
-    
-    // 添加到新的父级或根级
-    if (newParent) {
-      // 添加到新的父级
-      if (!newParent.children) {
-        newParent.children = [];
+    // 根据 position 参数确定放置位置
+    if (position === 'inside' || !position) {
+      // 放在内部（默认行为）
+      // 更新父级引用
+      gameObjectToMove.parentId = newParentId;
+      
+      if (newParent) {
+        // 添加到新的父级
+        if (!newParent.children) {
+          newParent.children = [];
+        }
+        newParent.children.push(gameObjectToMove);
+        
+        // 确保新父级展开
+        newParent.isExpanded = true;
+        
+        this.addConsoleMessage('info', `已将 ${gameObjectToMove.name} 移动到 ${newParent.name} 内部`, `在层级面板中`);
+      } else {
+        // 添加到根级
+        state.gameObjects.push(gameObjectToMove);
+        this.addConsoleMessage('info', `已将 ${gameObjectToMove.name} 移动到根级`, `在层级面板中`);
       }
-      newParent.children.push(gameObjectToMove);
+    } else if (position === 'before' || position === 'after') {
+      // 放在目标对象的前面或后面
+      let targetArray;
+      let targetIndex;
+      let targetParentId;
       
-      // 确保新父级展开
-      newParent.isExpanded = true;
+      if (newParent === null) {
+        // 目标是根级对象
+        targetArray = state.gameObjects;
+        targetIndex = targetArray.findIndex(go => go.id === newParentId);
+        targetParentId = null;
+      } else {
+        // 目标是某个父级的子对象
+        targetArray = newParent.children || [];
+        targetIndex = targetArray.findIndex(go => go.id === newParentId);
+        targetParentId = newParent.id;
+      }
       
-      this.addConsoleMessage('info', `已将 ${gameObjectToMove.name} 移动到 ${newParent.name} 下`, `在层级面板中`);
-    } else {
-      // 添加到根级
-      state.gameObjects.push(gameObjectToMove);
-      this.addConsoleMessage('info', `已将 ${gameObjectToMove.name} 移动到根级`, `在层级面板中`);
+      if (targetIndex !== -1) {
+        // 确定插入位置
+        const insertIndex = position === 'before' ? targetIndex : targetIndex + 1;
+        
+        // 更新游戏对象的父级
+        gameObjectToMove.parentId = targetParentId;
+        
+        // 插入到指定位置
+        targetArray.splice(insertIndex, 0, gameObjectToMove);
+        
+        const positionText = position === 'before' ? '前面' : '后面';
+        const targetName = newParent === null ? '根级对象' : newParent.name;
+        this.addConsoleMessage('info', `已将 ${gameObjectToMove.name} 移动到 ${targetName} 的${positionText}`, `在层级面板中`);
+      } else {
+        // 如果找不到目标位置，就添加到父级的末尾
+        gameObjectToMove.parentId = newParentId;
+        
+        if (newParent) {
+          if (!newParent.children) {
+            newParent.children = [];
+          }
+          newParent.children.push(gameObjectToMove);
+          newParent.isExpanded = true;
+          this.addConsoleMessage('info', `已将 ${gameObjectToMove.name} 移动到 ${newParent.name} 内部`, `在层级面板中`);
+        } else {
+          state.gameObjects.push(gameObjectToMove);
+          this.addConsoleMessage('info', `已将 ${gameObjectToMove.name} 移动到根级`, `在层级面板中`);
+        }
+      }
     }
   }
 };

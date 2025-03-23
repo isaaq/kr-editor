@@ -146,6 +146,13 @@ import editorStore from '../../store/editorStore';
   display: flex;
 }
 
+:deep(.splitpanes__pane) {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
 .status-bar {
   height: 25px;
   background-color: #444;

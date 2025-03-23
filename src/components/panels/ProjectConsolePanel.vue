@@ -149,8 +149,8 @@
           <!-- 底部导航路径 -->
           <div class="folder-path">
             <span v-for="(part, index) in folderPath" :key="index" class="path-part">
-              <span class="path-link" @click="navigateToPath(index)">{{ part.name }}</span>
-              <span v-if="index < folderPath.length - 1" class="path-separator">/</span>
+              <span class="path-link" @click="navigateToPath(index)" style="cursor:pointer;padding:2px 4px;border-radius:3px;transition:all 0.2s ease;">{{ part.name }}</span>
+              <span v-if="index < folderPath.length - 1" class="path-separator" style="margin:0 4px;color:#555;user-select:none;">/</span>
             </span>
           </div>
         </template>
@@ -248,10 +248,18 @@ const folderList = computed(() => {
     const depthA = getDepth(a);
     const depthB = getDepth(b);
     
+    // 先按层级深度排序
     if (depthA !== depthB) {
       return depthA - depthB;
     }
     
+    // 同层级文件夹，先按父文件夹分组
+    if (a.parentId !== b.parentId) {
+      // 按父文件夹ID排序，确保同一父文件夹的子文件夹在一起
+      return a.parentId - b.parentId;
+    }
+    
+    // 同父文件夹的子文件夹按名称排序
     return a.name.localeCompare(b.name);
   });
   
@@ -266,7 +274,17 @@ const currentFolderContents = computed(() => {
   }
   
   // 显示选中文件夹的直接子资产
-  return editorStore.state.assets.filter(asset => asset.parentId === currentFolder.value);
+  const contents = editorStore.state.assets.filter(asset => asset.parentId === currentFolder.value);
+  
+  // 按类型排序：先文件夹，再按文件类型
+  return contents.sort((a, b) => {
+    // 文件夹排在前面
+    if (a.type === 'folder' && b.type !== 'folder') return -1;
+    if (a.type !== 'folder' && b.type === 'folder') return 1;
+    
+    // 同类型按名称排序
+    return a.name.localeCompare(b.name);
+  });
 });
 
 // 当前文件夹路径
@@ -315,12 +333,18 @@ const filteredAssets = () => {
 // 根据资产类型获取图标
 const getAssetIcon = (type) => {
   switch (type) {
-    case 'folder': return '📁';
-    case 'texture': return '🖼️';
-    case 'script': return '📄';
-    case 'model': return '📦';
-    case 'prefab': return '🎮';
-    default: return '📄';
+    case 'folder': return '📁'; // 文件夹
+    case 'texture': return '🖼️'; // 纹理
+    case 'script': return '📜'; // 脚本
+    case 'model': return '🖼'; // 模型
+    case 'prefab': return '🎏'; // 预制体
+    case 'scene': return '🎨'; // 场景
+    case 'audio': return '🎧'; // 音频
+    case 'video': return '🎥'; // 视频
+    case 'material': return '🖌️'; // 材质
+    case 'animation': return '👻'; // 动画
+    case 'shader': return '✨'; // 着色器
+    default: return '📄'; // 默认文件
   }
 };
 
@@ -579,6 +603,7 @@ initializeFolderView();
   align-items: center;
   padding: 4px 0;
   cursor: pointer;
+  border-radius: 2px;
   white-space: nowrap;
   transition: background-color 0.2s ease;
 }
@@ -624,7 +649,7 @@ initializeFolderView();
 }
 
 .folder-path {
-  height: 24px;
+  height: 28px;
   background-color: #1e1e1e;
   border-top: 1px solid #333;
   display: flex;
@@ -632,6 +657,24 @@ initializeFolderView();
   padding: 0 10px;
   font-size: 12px;
   color: #ddd;
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: thin;
+  scrollbar-color: #444 #222;
+  scroll-behavior: smooth;
+}
+
+.folder-path::-webkit-scrollbar {
+  height: 4px;
+}
+
+.folder-path::-webkit-scrollbar-track {
+  background: #222;
+}
+
+.folder-path::-webkit-scrollbar-thumb {
+  background: #444;
+  border-radius: 2px;
 }
 
 .path-part {
@@ -641,31 +684,30 @@ initializeFolderView();
 
 .path-link {
   cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: all 0.2s ease;
 }
 
 .path-link:hover {
   color: #fff;
-  text-decoration: underline;
+  background-color: #3a3a3a;
 }
 
 .path-separator {
-  margin: 0 5px;
-  color: #666;
+  margin: 0 4px;
+  color: #555;
+  user-select: none;
 }
 
-/* 网格视图 */
-.asset-browser.grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 10px;
-  align-content: flex-start;
+.path-link:last-child {
+  color: #fff;
+  font-weight: 500;
+  cursor: default;
 }
 
-/* 列表视图 */
-.asset-browser.list {
-  display: flex;
-  flex-direction: column;
+.path-link:last-child:hover {
+  background-color: transparent;
 }
 
 /* 搜索结果样式 */
@@ -783,12 +825,17 @@ initializeFolderView();
   cursor: pointer;
   border-radius: 4px;
   padding: 8px 4px;
-  transition: background-color 0.2s ease;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .asset-item:hover {
   background-color: #3a3a3a;
   border-radius: 3px;
+  transform: translateY(-2px);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
 }
 
 .asset-item.active {
@@ -803,7 +850,15 @@ initializeFolderView();
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
+  font-size: 28px;
+  background-color: #2a2a2a;
+  border-radius: 8px;
+  margin-bottom: 5px;
+  transition: all 0.2s ease;
+}
+
+.asset-item:hover .asset-icon {
+  transform: scale(1.05);
 }
 
 .asset-name {
@@ -811,6 +866,13 @@ initializeFolderView();
   text-align: center;
   word-break: break-word;
   width: 100%;
+  max-height: 28px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .filter-buttons {
