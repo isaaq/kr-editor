@@ -386,15 +386,15 @@ onMounted(() => {
   align-items: center;
   cursor: move;
   z-index: 1;
-  min-width: 40px;
-  min-height: 40px;
+  min-width: 50px;
+  min-height: 50px;
   padding: 5px;
-  border-radius: 3px;
+  border-radius: 3px; 
 }
 
 .scene-object.original-object {
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  background-color: rgba(60, 60, 60, 0.3);
+  /* border: 1px solid rgba(255, 255, 255, 0.5);
+  background-color: rgba(60, 60, 60, 0.3); */
 }
 
 .scene-object.original-object.being-dragged {
@@ -403,7 +403,7 @@ onMounted(() => {
 }
 
 .scene-object.active {
-  border: 2px solid #4d78cc;
+  border: 2px dotted #4d78cc;
   background-color: rgba(77, 120, 204, 0.1);
   z-index: 2;
 }

@@ -6,8 +6,11 @@
       'being-dragged': isDragging && draggedObjectId === gameObject.id
     }"
     :style="{
-      left: `${getAbsolutePosition().x}px`, 
+      position: 'absolute',
+      left: `${getAbsolutePosition().x}px`,
       top: `${getAbsolutePosition().y}px`,
+      width: `${getContainerSize().width}px`,
+      height: `${getContainerSize().height}px`,
       transform: `scale(${gameObject.scale.x}, ${gameObject.scale.y}) rotate(${gameObject.rotation.z}deg)`,
       zIndex: depth
     }"
@@ -15,13 +18,12 @@
     @mousedown="handleMouseDown($event, gameObject)"
   >
     <div class="object-content" :class="gameObject.type.toLowerCase()">
-      <!-- 根据对象类型渲染不同的内容 -->
-      <div v-if="gameObject.type === 'Container'" class="container-object"></div>
-      <div v-else-if="gameObject.type === 'Table'" class="table-object">
-        <div class="table-header"></div>
-        <div class="table-row" v-for="i in 3" :key="i"></div>
-      </div>
-      <div v-else class="default-object"></div>
+      <!-- 根据对象类型动态渲染内容 -->
+      <component 
+        :is="getObjectComponent(gameObject.type)"
+        :game-object="gameObject"
+        :class="gameObject.type.toLowerCase() + '-object'"
+      />
       
       <div class="object-gizmo">+</div>
       <div class="object-label">{{ gameObject.name }}</div>
@@ -42,7 +44,10 @@
 </template>
 
 <script setup>
-import { computed, defineProps, defineEmits } from 'vue';
+import { computed, defineProps, defineEmits, markRaw } from 'vue';
+import ContainerObject from './objects/ContainerObject.vue';
+import TableObject from './objects/TableObject.vue';
+import DefaultObject from './objects/DefaultObject.vue';
 import editorStore from '../../store/editorStore';
 
 const props = defineProps({
@@ -70,6 +75,18 @@ const props = defineProps({
 
 const emit = defineEmits(['start-drag']);
 
+// 对象类型到组件的映射
+const objectComponents = {
+  Container: markRaw(ContainerObject),
+  Table: markRaw(TableObject),
+  Default: markRaw(DefaultObject)
+};
+
+// 获取对应类型的组件
+const getObjectComponent = (type) => {
+  return objectComponents[type] || objectComponents.Default;
+};
+
 // 计算对象的绝对位置（考虑父对象的位置）
 const getAbsolutePosition = () => {
   // 根对象直接使用自己的位置
@@ -77,6 +94,37 @@ const getAbsolutePosition = () => {
     x: props.gameObject.position.x,
     y: props.gameObject.position.y
   };
+};
+
+// 计算容器大小，包括所有子对象
+const getContainerSize = () => {
+  let width = 50;  // 默认最小宽度
+  let height = 50; // 默认最小高度
+  
+  if (props.gameObject.children && props.gameObject.children.length > 0) {
+    // 找出所有子对象的边界
+    let minX = 0;
+    let minY = 0;
+    let maxX = width;
+    let maxY = height;
+    
+    props.gameObject.children.forEach(child => {
+      const childX = child.position.x;
+      const childY = child.position.y;
+      
+      // 更新边界
+      minX = Math.min(minX, childX);
+      minY = Math.min(minY, childY);
+      maxX = Math.max(maxX, childX + 50); // 假设每个子对象至少50px宽
+      maxY = Math.max(maxY, childY + 50); // 假设每个子对象至少50px高
+    });
+    
+    // 计算所需的容器大小
+    width = Math.max(width, maxX - minX);
+    height = Math.max(height, maxY - minY);
+  }
+  
+  return { width, height };
 };
 
 // 处理鼠标按下事件
@@ -98,10 +146,14 @@ const handleMouseDown = (event, obj) => {
 <style scoped>
 .scene-object {
   position: absolute;
+  display: flex;
+  justify-content: center;
+  align-items: center;
   min-width: 50px;
   min-height: 50px;
   cursor: pointer;
   user-select: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .object-content {
@@ -167,7 +219,7 @@ const handleMouseDown = (event, obj) => {
 }
 
 .scene-object.active > .object-content {
-  border: 2px solid #4a90e2;
+  /* border: 2px solid #4a90e2; */
 }
 
 .scene-object.being-dragged > .object-content {
