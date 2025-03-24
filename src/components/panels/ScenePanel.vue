@@ -91,39 +91,18 @@
         <div class="grid-container">
           <!-- Grid lines would be rendered here -->
           
-          <!-- 动态生成场景对象 -->
-          <div 
+          <!-- 使用递归组件渲染场景对象层级 -->
+          <scene-object-item
             v-for="obj in editorStore.getRootGameObjects()" 
             :key="obj.id"
-            class="scene-object original-object" 
-            :class="{ 
-              'active': editorStore.state.activeGameObject === obj.id,
-              'being-dragged': isDragging && draggedObject && draggedObject.id === obj.id
-            }"
-            :style="{
-              left: `${obj.position.x}px`, 
-              top: `${obj.position.y}px`,
-              transform: `scale(${obj.scale.x}, ${obj.scale.y}) rotate(${obj.rotation.z}deg)`
-            }"
-            @click="editorStore.selectGameObject(obj.id, $event.ctrlKey || $event.metaKey)"
-            @mousedown="startDrag($event, obj)"
-          >
-            <div class="object-gizmo">+</div>
-            <div class="object-label">{{ obj.name }}</div>
-          </div>
+            :game-object="obj"
+            :depth="0"
+            :is-dragging="isDragging"
+            :dragged-object-id="draggedObject ? draggedObject.id : null"
+            @start-drag="handleChildDrag"
+          />
           
-          <!-- 拖拽预览对象 -->
-          <div 
-            v-if="dragPreview.visible" 
-            class="scene-object drag-preview" 
-            :style="{
-              left: `${dragPreview.x}px`, 
-              top: `${dragPreview.y}px`
-            }"
-          >
-            <div class="object-gizmo">+</div>
-            <div class="object-label">{{ dragPreview.objectName }}</div>
-          </div>
+          <!-- 移除拖拽预览对象，改为直接拖拽移动 -->
           
           <div class="coordinates">
             <div class="coordinates-label">
@@ -141,6 +120,7 @@
 import { ref, onMounted, computed } from 'vue';
 import { useDraggable } from '@vueuse/core';
 import editorStore from '../../store/editorStore';
+import SceneObjectItem from '../items/SceneObjectItem.vue';
 
 const sceneViewport = ref(null);
 const mousePosition = ref({ x: 0, y: 0 });
@@ -165,6 +145,13 @@ const selectedObject = computed(() => {
 
 // 开始拖拽对象
 const startDrag = (event, obj) => {
+  // 只有在移动工具激活时才允许拖拽
+  if (editorStore.state.activeTool !== 'move') {
+    // 如果不是移动工具，只选中对象不拖拽
+    editorStore.selectGameObject(obj.id, event.ctrlKey || event.metaKey);
+    return;
+  }
+  
   // 设置当前拖拽的对象
   draggedObject.value = obj;
   isDragging.value = true;
@@ -176,14 +163,7 @@ const startDrag = (event, obj) => {
     y: event.clientY - obj.position.y
   };
   
-  // 显示拖拽预览
-  dragPreview.value = {
-    visible: true,
-    x: obj.position.x,
-    y: obj.position.y,
-    objectId: obj.id,
-    objectName: obj.name
-  };
+  // 直接拖拽模式，不需要预览
   
   // 添加鼠标移动和松开事件监听器
   document.addEventListener('mousemove', onDrag);
@@ -192,11 +172,22 @@ const startDrag = (event, obj) => {
   // 阻止事件冒泡和默认行为
   event.stopPropagation();
   event.preventDefault();
+  
+  // 在控制台显示正在移动的对象
+  editorStore.addConsoleMessage('info', `开始移动对象: ${obj.name}`, '在编辑区中');
 };
 
-// 拖拽过程中更新对象位置
+// 处理子组件发出的拖拽事件
+const handleChildDrag = ({ event, object }) => {
+  // 将事件传递给 startDrag 函数处理
+  // startDrag 函数会检查当前工具是否为移动工具
+  startDrag(event, object);
+};
+
+// 拖拽过程中直接更新对象位置
 const onDrag = (event) => {
-  if (!isDragging.value || !draggedObject.value || !sceneViewport.value) return;
+  // 确保当前工具是移动工具且正在拖拽
+  if (!isDragging.value || !draggedObject.value || !sceneViewport.value || editorStore.state.activeTool !== 'move') return;
   
   const rect = sceneViewport.value.getBoundingClientRect();
   
@@ -208,9 +199,21 @@ const onDrag = (event) => {
   const clampedX = Math.max(0, Math.min(rect.width - 50, newX));
   const clampedY = Math.max(0, Math.min(rect.height - 50, newY));
   
-  // 更新拖拽预览位置
-  dragPreview.value.x = Math.round(clampedX);
-  dragPreview.value.y = Math.round(clampedY);
+  // 记录移动前的位置
+  const oldX = draggedObject.value.position.x;
+  const oldY = draggedObject.value.position.y;
+  
+  // 计算位置变化量
+  const deltaX = Math.round(clampedX) - oldX;
+  const deltaY = Math.round(clampedY) - oldY;
+  
+  // 直接更新对象位置
+  draggedObject.value.position.x = Math.round(clampedX);
+  draggedObject.value.position.y = Math.round(clampedY);
+  
+  // 当父对象移动时，子对象的相对位置应保持不变
+  // 子对象的位置已经在 SceneObjectItem.vue 中正确计算
+  // 这里不需要更新子对象的位置
   
   // 更新对象位置坐标显示
   currentPosition.value = {
@@ -225,23 +228,19 @@ const onDrag = (event) => {
 
 // 停止拖拽
 const stopDrag = (event) => {
-  if (draggedObject.value && dragPreview.value.visible) {
-    // 更新对象到预览位置
-    draggedObject.value.position.x = dragPreview.value.x;
-    draggedObject.value.position.y = dragPreview.value.y;
-    
+  if (draggedObject.value) {
     // 保存最终位置到编辑器状态
     editorStore.updateGameObjectTransform(draggedObject.value.id, {
       position: { 
-        x: dragPreview.value.x,
-        y: dragPreview.value.y,
+        x: draggedObject.value.position.x,
+        y: draggedObject.value.position.y,
         z: draggedObject.value.position.z
       }
     });
+    
+    // 在控制台显示移动结果
+    editorStore.addConsoleMessage('info', `对象移动到了 x: ${Math.round(draggedObject.value.position.x)}, y: ${Math.round(draggedObject.value.position.y)}`, '在编辑区中');
   }
-  
-  // 隐藏拖拽预览
-  dragPreview.value.visible = false;
   
   isDragging.value = false;
   draggedObject.value = null;

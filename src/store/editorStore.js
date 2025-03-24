@@ -44,8 +44,8 @@ const state = reactive({
       children: [
         {
           id: 4,
-          name: 'Child Object 1',
-          type: 'GameObject',
+          name: '表格',
+          type: 'Table',
           position: { x: 1, y: 0, z: 0 },
           rotation: { x: 0, y: 0, z: 0 },
           scale: { x: 0.5, y: 0.5, z: 0.5 },
@@ -230,11 +230,33 @@ const actions = {
     return result;
   },
   updateGameObjectTransform(id, transform) {
-    const obj = state.gameObjects.find(obj => obj.id === id);
+    // 递归查找对象
+    const findObjectById = (objects, targetId) => {
+      for (const obj of objects) {
+        if (obj.id === targetId) {
+          return obj;
+        }
+        if (obj.children && obj.children.length > 0) {
+          const found = findObjectById(obj.children, targetId);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+    
+    const obj = findObjectById(state.gameObjects, id);
     if (obj) {
-      Object.assign(obj.position, transform.position || {});
-      Object.assign(obj.rotation, transform.rotation || {});
-      Object.assign(obj.scale, transform.scale || {});
+      // 记录原始位置
+      const oldPosition = { ...obj.position };
+      
+      // 更新对象变换
+      if (transform.position) Object.assign(obj.position, transform.position);
+      if (transform.rotation) Object.assign(obj.rotation, transform.rotation);
+      if (transform.scale) Object.assign(obj.scale, transform.scale);
+      
+      // 如果是位置变化，且有子对象，不需要更新子对象的位置
+      // 因为子对象的位置是相对于父对象的，在渲染时会自动计算绝对位置
+      // 在 SceneObjectItem.vue 中的 getAbsolutePosition 方法中已经正确处理了这个问题
     }
   },
   updateGameObjectName(id, name) {
