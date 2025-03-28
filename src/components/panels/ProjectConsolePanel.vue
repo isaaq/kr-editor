@@ -80,25 +80,81 @@
             <!-- 左侧文件夹树 -->
             <div class="folder-tree-container">
               <div class="folder-tree">
-                <div 
-                  v-for="folder in folderList" 
-                  :key="folder.id"
-                  class="folder-tree-item"
-                  :class="{ 'active': currentFolder === folder.id, 'expanded': isExpanded(folder.id) }"
-                  :style="{ paddingLeft: `${getDepth(folder) * 16 + 8}px` }"
-                  @click="selectFolder(folder.id)"
-                >
+                <!-- 递归渲染文件夹树 -->
+                <template v-for="folder in rootFolders" :key="folder.id">
+                  <!-- 根文件夹 -->
                   <div 
-                    class="expand-icon" 
-                    v-if="hasFolderChildren(folder)"
-                    @click.stop="toggleFolderExpanded(folder.id)"
+                    class="folder-tree-item root-folder"
+                    :class="{ 'active': currentFolder === folder.id, 'expanded': isExpanded(folder.id) }"
+                    @click="selectFolder(folder.id)"
                   >
-                    {{ isExpanded(folder.id) ? '▼' : '▶' }}
+                    <div 
+                      class="expand-icon" 
+                      v-if="hasFolderChildren(folder)"
+                      @click.stop="toggleFolderExpanded(folder.id)"
+                    >
+                      {{ isExpanded(folder.id) ? '▼' : '▶' }}
+                    </div>
+                    <div class="expand-placeholder" v-else></div>
+                    <div class="folder-icon">📁</div>
+                    <div class="folder-name">{{ folder.name }}</div>
                   </div>
-                  <div class="expand-placeholder" v-else></div>
-                  <div class="folder-icon">📁</div>
-                  <div class="folder-name">{{ folder.name }}</div>
-                </div>
+                  
+                  <!-- 当前根文件夹的直接子文件夹 -->
+                  <template v-if="isExpanded(folder.id)">
+                    <div 
+                      v-for="childFolder in getDirectChildFolders(folder.id)" 
+                      :key="childFolder.id"
+                      class="folder-tree-item"
+                      :class="{ 
+                        'active': currentFolder === childFolder.id, 
+                        'expanded': isExpanded(childFolder.id)
+                      }"
+                      :style="{ paddingLeft: `${getDepth(childFolder) * 16 + 8}px` }"
+                      @click="selectFolder(childFolder.id)"
+                    >
+                      <div 
+                        class="expand-icon" 
+                        v-if="hasFolderChildren(childFolder)"
+                        @click.stop="toggleFolderExpanded(childFolder.id)"
+                      >
+                        {{ isExpanded(childFolder.id) ? '▼' : '▶' }}
+                      </div>
+                      <div class="expand-placeholder" v-else></div>
+                      <div class="folder-icon">📁</div>
+                      <div class="folder-name">{{ childFolder.name }}</div>
+                    </div>
+                    
+                    <!-- 递归渲染子文件夹的子文件夹 -->
+                    <template v-for="childFolder in getDirectChildFolders(folder.id)" :key="'sub-'+childFolder.id">
+                      <template v-if="isExpanded(childFolder.id)">
+                        <div 
+                          v-for="subFolder in getAllSubFolders(childFolder.id)" 
+                          :key="subFolder.id"
+                          class="folder-tree-item"
+                          :class="{ 
+                            'active': currentFolder === subFolder.id, 
+                            'expanded': isExpanded(subFolder.id),
+                            'hidden': !shouldShowFolder(subFolder)
+                          }"
+                          :style="{ paddingLeft: `${getDepth(subFolder) * 16 + 8}px` }"
+                          @click="selectFolder(subFolder.id)"
+                        >
+                          <div 
+                            class="expand-icon" 
+                            v-if="hasFolderChildren(subFolder)"
+                            @click.stop="toggleFolderExpanded(subFolder.id)"
+                          >
+                            {{ isExpanded(subFolder.id) ? '▼' : '▶' }}
+                          </div>
+                          <div class="expand-placeholder" v-else></div>
+                          <div class="folder-icon">📁</div>
+                          <div class="folder-name">{{ subFolder.name }}</div>
+                        </div>
+                      </template>
+                    </template>
+                  </template>
+                </template>
               </div>
             </div>
             
@@ -237,11 +293,23 @@ provide('viewMode', viewMode);
 const currentFolder = ref(null); // 当前选中的文件夹 ID
 const expandedFolders = ref([]); // 已展开的文件夹 ID 列表
 
-// 获取所有文件夹
-// 按照层级结构排序
-const folderList = computed(() => {
-  // 只返回类型为文件夹的资产
-  const folders = editorStore.state.assets.filter(asset => asset.type === 'folder');
+// 获取根文件夹
+const rootFolders = computed(() => {
+  // 返回类型为文件夹且没有父级的资产
+  const folders = editorStore.state.assets.filter(asset => 
+    asset.type === 'folder' && asset.parentId === null
+  );
+  
+  // 按名称排序
+  return folders.sort((a, b) => a.name.localeCompare(b.name));
+});
+
+// 获取非根文件夹
+const nonRootFolders = computed(() => {
+  // 返回类型为文件夹且有父级的资产
+  const folders = editorStore.state.assets.filter(asset => 
+    asset.type === 'folder' && asset.parentId !== null
+  );
   
   // 排序：首先依照层级排序，然后按名称排序
   folders.sort((a, b) => {
@@ -290,7 +358,7 @@ const currentFolderContents = computed(() => {
 // 当前文件夹路径
 const folderPath = computed(() => {
   if (currentFolder.value === null) {
-    return [{ id: null, name: 'Assets' }];
+    return []; // 没有选中文件夹时返回空路径
   }
   
   const path = [];
@@ -300,9 +368,6 @@ const folderPath = computed(() => {
     path.unshift(current);
     current = current.parentId !== null ? editorStore.state.assets.find(a => a.id === current.parentId) : null;
   }
-  
-  // 添加根目录
-  path.unshift({ id: null, name: 'Assets' });
   
   return path;
 });
@@ -486,6 +551,52 @@ const initializeFolderView = () => {
   });
 };
 
+// 判断是否应该显示文件夹（基于父文件夹是否展开）
+const shouldShowFolder = (folder) => {
+  if (!folder.parentId) return true; // 根文件夹总是显示
+  
+  // 检查所有父文件夹是否都已展开
+  let parentId = folder.parentId;
+  while (parentId) {
+    if (!expandedFolders.value.includes(parentId)) {
+      return false; // 如果有任何父文件夹未展开，则不显示
+    }
+    
+    // 获取父文件夹
+    const parent = editorStore.state.assets.find(a => a.id === parentId);
+    if (!parent) break;
+    
+    parentId = parent.parentId;
+  }
+  
+  return true;
+};
+
+// 获取指定文件夹的直接子文件夹
+const getDirectChildFolders = (parentId) => {
+  return editorStore.state.assets.filter(asset => 
+    asset.parentId === parentId && asset.type === 'folder'
+  );
+};
+
+// 获取指定文件夹的所有子文件夹（包括子文件夹的子文件夹）
+const getAllSubFolders = (parentId) => {
+  // 获取直接子文件夹
+  const directChildren = getDirectChildFolders(parentId);
+  
+  // 获取所有子文件夹的子文件夹
+  let allSubFolders = [...directChildren];
+  
+  directChildren.forEach(child => {
+    const subFolders = editorStore.state.assets.filter(asset => 
+      asset.parentId === child.id && asset.type === 'folder'
+    );
+    allSubFolders = [...allSubFolders, ...subFolders];
+  });
+  
+  return allSubFolders;
+};
+
 // 在组件挂载时初始化
 initializeFolderView();
 </script>
@@ -614,6 +725,17 @@ initializeFolderView();
 
 .folder-tree-item.active {
   background-color: #2d5c8a;
+}
+
+.folder-tree-item.hidden {
+  display: none;
+}
+
+.folder-tree-item.root-folder {
+  font-weight: bold;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 4px;
+  padding-bottom: 4px;
 }
 
 .expand-icon {

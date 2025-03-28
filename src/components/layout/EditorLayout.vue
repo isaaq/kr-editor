@@ -3,13 +3,29 @@
     <div class="toolbar">
       <div class="logo">Kr Editor</div>
       <div class="main-menu">
-        <div class="menu-item">File</div>
-        <div class="menu-item">Edit</div>
-        <div class="menu-item">Assets</div>
-        <div class="menu-item">GameObject</div>
-        <div class="menu-item">Component</div>
-        <div class="menu-item">Window</div>
-        <div class="menu-item">Help</div>
+        <div 
+          v-for="(item, index) in menuItems" 
+          :key="index" 
+          class="menu-item"
+          @mouseover="showSubMenu(index)"
+          @mouseleave="hideSubMenu(index)"
+        >
+          <div class="menu-item-title">{{ item.title }}</div>
+          <div 
+            v-if="item.content && isSubMenuVisible[index]" 
+            class="menu-item-content"
+            @mouseleave="hideSubMenu(index)"
+          >
+            <div 
+              v-for="(subItem, subIndex) in item.content" 
+              :key="subIndex" 
+              class="menu-item"
+              @click="handleMenuItemClick(subItem.action)"
+            >
+              {{ subItem.label }}
+            </div>
+          </div>
+        </div>
       </div>
       <div class="toolbar-actions">
         <button 
@@ -83,6 +99,39 @@ import editorStore from '../../store/editorStore';
 import { ref } from 'vue';
 
 const currentTab = ref('scene');
+const isSubMenuVisible = ref([]);
+
+const menuItems = [
+  {
+    title: 'File',
+    content: [
+      { label: 'New Scene', action: () => editorStore.newScene() },
+      { label: 'Open Scene', action: () => editorStore.openScene() },
+      { label: 'Save Scene', action: () => editorStore.saveScene() },
+      { label: 'Save Scene As', action: () => editorStore.saveSceneAs() }
+    ]
+  },
+  { title: 'Edit' },
+  { title: 'Assets' },
+  { title: 'GameObject' },
+  { title: 'Component' },
+  { title: 'Window' },
+  { title: 'Help' }
+];
+
+const showSubMenu = (index) => {
+  isSubMenuVisible.value[index] = true;
+};
+
+const hideSubMenu = (index) => {
+  isSubMenuVisible.value[index] = false;
+};
+
+const handleMenuItemClick = (action) => {
+  if (typeof action === 'function') {
+    action();
+  }
+};
 </script>
 
 <style scoped>
@@ -118,12 +167,34 @@ const currentTab = ref('scene');
 }
 
 .menu-item {
+  position: relative;
   cursor: pointer;
   padding: 5px;
 }
 
 .menu-item:hover {
   background-color: #555;
+}
+
+.menu-item-content {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background-color: #444;
+  border: 1px solid #666;
+  z-index: 1000;
+  min-width: 150px;
+  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+.menu-item-content .menu-item {
+  padding: 5px 10px;
+  width: 100%;
+  display: block;
+}
+
+.menu-item-content .menu-item:hover {
+  background-color: #5a5a5a;
 }
 
 .toolbar-actions {
